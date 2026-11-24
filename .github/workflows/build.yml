@@ -25,60 +25,73 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup Java 21
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '21'
           cache: maven
 
-      - name: Check Required Project Files
+      - name: Check Project Files
         run: |
           test -f pom.xml || {
             echo "ERROR: pom.xml fehlt!"
             exit 1
           }
 
-          test -f src/main/resources/plugin.yml || {
-            echo "ERROR: src/main/resources/plugin.yml fehlt!"
+          test -f TreasureHuntPlugin.java || {
+            echo "ERROR: TreasureHuntPlugin.java fehlt!"
             exit 1
           }
+
+          test -f plugin.yml || {
+            echo "ERROR: plugin.yml fehlt!"
+            exit 1
+          }
+
+      - name: Prepare Maven Project
+        run: |
+          mkdir -p src/main/java/de/powersmp/treasurehunt
+          mkdir -p src/main/resources
+
+          cp TreasureHuntPlugin.java \
+            src/main/java/de/powersmp/treasurehunt/
+
+          cp plugin.yml src/main/resources/
+          cp config.yml src/main/resources/
+          cp messages.yml src/main/resources/
+
+          echo "Projektstruktur vorbereitet."
 
       - name: Build Plugin
         run: mvn --batch-mode --no-transfer-progress clean package
 
-      - name: Find and Verify Plugin JAR
+      - name: Verify Plugin JAR
         shell: bash
         run: |
           set -euo pipefail
 
-          JAR=$(find target -maxdepth 1 -type f -name '*.jar' \
+          JAR=$(find target -maxdepth 1 -type f \
+            -name '*.jar' \
             ! -name '*-sources.jar' \
             ! -name '*-javadoc.jar' \
             | head -n 1)
 
           if [ -z "$JAR" ]; then
-            echo "ERROR: Keine Plugin-JAR gefunden!"
+            echo "ERROR: Keine JAR gefunden!"
             exit 1
           fi
 
-          echo "Gefundene JAR: $JAR"
-
           jar tf "$JAR" > jar-content.txt
 
-          grep -Fxq "plugin.yml" jar-content.txt || {
-            echo "ERROR: plugin.yml fehlt im Stammverzeichnis der JAR!"
-            exit 1
-          }
-
-          grep -Fq "TreasureHuntPlugin.class" jar-content.txt || {
-            echo "ERROR: TreasureHuntPlugin.class fehlt!"
-            exit 1
-          }
+          grep -Fxq "plugin.yml" jar-content.txt
+          grep -Fxq "config.yml" jar-content.txt
+          grep -Fxq "messages.yml" jar-content.txt
+          grep -Fxq "de/powersmp/treasurehunt/TreasureHuntPlugin.class" jar-content.txt
 
           mkdir -p release
           cp "$JAR" release/TreasureHunt.jar
 
-          echo "SUCCESS: JAR und plugin.yml erfolgreich geprüft!"
+          echo "SUCCESS: Plugin-JAR erfolgreich geprüft!"
 
       - name: Upload Finished JAR
         uses: actions/upload-artifact@v4
