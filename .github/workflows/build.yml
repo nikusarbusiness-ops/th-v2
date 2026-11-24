@@ -1,64 +1,57 @@
 
-name: Build TreasureHunt ZIP
+name: Build TreasureHunt Plugin
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
+    tags:
+      - 'v*'
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Repository herunterladen
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Java 21 installieren
+      - name: Setup Java 21
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '21'
           cache: maven
 
-      - name: Projekt vollständig kompilieren
+      - name: Validate Maven Project
+        run: mvn --batch-mode validate
+
+      - name: Compile and Build JAR
         run: mvn --batch-mode clean package
 
-      - name: ZIP-Verzeichnis vorbereiten
+      - name: Verify JAR
         run: |
-          mkdir -p output/TreasureHunt
+          JAR=$(find target -maxdepth 1 -type f -name '*.jar' ! -name '*-sources.jar' ! -name '*-javadoc.jar' | head -n 1)
+          test -n "$JAR"
+          jar tf "$JAR" > /dev/null
+          mkdir -p release
+          cp "$JAR" release/TreasureHunt.jar
+          echo "JAR successfully built and verified."
 
-          # Gesamtes Projekt übernehmen
-          rsync -a \
-            --exclude='.git/' \
-            --exclude='target/' \
-            --exclude='output/' \
-            --exclude='.idea/' \
-            --exclude='.vscode/' \
-            ./ output/TreasureHunt/
-
-          # Fertige Plugin-JAR hinzufügen
-          mkdir -p output/TreasureHunt/build
-          cp target/*.jar output/TreasureHunt/build/
-
-      - name: ZIP erstellen
-        run: |
-          cd output
-          zip -r -9 TreasureHunt.zip TreasureHunt
-
-      - name: ZIP-Inhalt kontrollieren
-        run: |
-          test -s output/TreasureHunt.zip
-          unzip -t output/TreasureHunt.zip
-          echo "ZIP erfolgreich erstellt und geprüft."
-
-      - name: Fertige ZIP veröffentlichen
+      - name: Upload JAR Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: TreasureHunt-Complete
-          path: output/TreasureHunt.zip
+          name: TreasureHunt-JAR
+          path: release/TreasureHunt.jar
           if-no-files-found: error
-          compression-level: 9
+
+      - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release/TreasureHunt.jar
+          generate_release_notes: true
