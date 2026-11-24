@@ -7,6 +7,9 @@ on:
       - main
     tags:
       - 'v*'
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
@@ -14,6 +17,7 @@ permissions:
 
 jobs:
   build:
+    name: Compile and Verify TreasureHunt
     runs-on: ubuntu-latest
 
     steps:
@@ -27,27 +31,62 @@ jobs:
           java-version: '21'
           cache: maven
 
-      - name: Validate Maven Project
-        run: mvn --batch-mode validate
-
-      - name: Compile and Build JAR
-        run: mvn --batch-mode clean package
-
-      - name: Verify JAR
+      - name: Check Required Project Files
         run: |
-          JAR=$(find target -maxdepth 1 -type f -name '*.jar' ! -name '*-sources.jar' ! -name '*-javadoc.jar' | head -n 1)
-          test -n "$JAR"
-          jar tf "$JAR" > /dev/null
+          test -f pom.xml || {
+            echo "ERROR: pom.xml fehlt!"
+            exit 1
+          }
+
+          test -f src/main/resources/plugin.yml || {
+            echo "ERROR: src/main/resources/plugin.yml fehlt!"
+            exit 1
+          }
+
+      - name: Build Plugin
+        run: mvn --batch-mode --no-transfer-progress clean package
+
+      - name: Find and Verify Plugin JAR
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          JAR=$(find target -maxdepth 1 -type f -name '*.jar' \
+            ! -name '*-sources.jar' \
+            ! -name '*-javadoc.jar' \
+            | head -n 1)
+
+          if [ -z "$JAR" ]; then
+            echo "ERROR: Keine Plugin-JAR gefunden!"
+            exit 1
+          fi
+
+          echo "Gefundene JAR: $JAR"
+
+          jar tf "$JAR" > jar-content.txt
+
+          grep -Fxq "plugin.yml" jar-content.txt || {
+            echo "ERROR: plugin.yml fehlt im Stammverzeichnis der JAR!"
+            exit 1
+          }
+
+          grep -Fq "TreasureHuntPlugin.class" jar-content.txt || {
+            echo "ERROR: TreasureHuntPlugin.class fehlt!"
+            exit 1
+          }
+
           mkdir -p release
           cp "$JAR" release/TreasureHunt.jar
-          echo "JAR successfully built and verified."
 
-      - name: Upload JAR Artifact
+          echo "SUCCESS: JAR und plugin.yml erfolgreich geprüft!"
+
+      - name: Upload Finished JAR
         uses: actions/upload-artifact@v4
         with:
           name: TreasureHunt-JAR
           path: release/TreasureHunt.jar
           if-no-files-found: error
+          compression-level: 0
 
       - name: Publish GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
