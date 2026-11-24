@@ -1,0 +1,50 @@
+name: Prepare SRC Structure
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  prepare-src:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Repository auschecken
+        uses: actions/checkout@v4
+
+      - name: Dateien in src/ Struktur sortieren
+        run: |
+          mkdir -p out/src/main/java out/src/main/resources
+
+          # Java-Datei (falls im Root oder bereits unter src/)
+          if [ -f "TreasureHuntPlugin.java" ]; then
+            cp TreasureHuntPlugin.java out/src/main/java/
+          fi
+          if [ -d "src" ]; then
+            cp -r src/* out/src/ 2>/dev/null || true
+          fi
+
+          # YAML-Dateien in resources legen
+          for f in plugin.yml config.yml messages.yml; do
+            if [ -f "$f" ]; then
+              cp "$f" out/src/main/resources/
+            fi
+          done
+
+          # pom.xml ebenfalls mitnehmen
+          if [ -f "pom.xml" ]; then
+            cp pom.xml out/
+          fi
+
+      - name: Sortierte Dateien als Artifact hochladen
+        uses: actions/upload-artifact@v4
+        with:
+          name: th-v2-src
+          path: out/
+          if-no-files-found: error
