@@ -1,10 +1,13 @@
-name: Build Plugin JAR
+
+name: Build TreasureHunt Plugin
 
 on:
   push:
-    branches: [ "main" ]
+    branches:
+      - main
   pull_request:
-    branches: [ "main" ]
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
@@ -15,38 +18,41 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Repository auschecken
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Java 21 einrichten
+      - name: Setup Java 21
         uses: actions/setup-java@v4
         with:
-          distribution: "temurin"
-          java-version: "21"
-          cache: "maven"
+          distribution: temurin
+          java-version: '21'
+          cache: maven
 
-      - name: Dateien in src/ zusammensetzen
-        run: |
-          mkdir -p src/main/java src/main/resources
-
-          # Falls TreasureHuntPlugin.java im Root liegt, in src/main/java kopieren
-          if [ -f "TreasureHuntPlugin.java" ]; then
-            cp TreasureHuntPlugin.java src/main/java/
-          fi
-
-          # YAML-Dateien aus dem Root nach src/main/resources kopieren
-          for f in plugin.yml config.yml messages.yml; do
-            if [ -f "$f" ]; then
-              cp "$f" src/main/resources/
-            fi
-          done
-
-      - name: Mit Maven kompilieren und als JAR verpacken
+      - name: Build Plugin with Maven
         run: mvn -B clean package
 
-      - name: Fertige JAR als Artifact hochladen
+      - name: Prepare ZIP Folder
+        run: |
+          mkdir -p release/TreasureHunt
+          mkdir -p release/TreasureHunt/source
+
+          cp -r src release/TreasureHunt/source/
+          cp pom.xml release/TreasureHunt/source/
+          cp README* release/TreasureHunt/source/ 2>/dev/null || true
+
+          cp target/*.jar release/TreasureHunt/
+
+          cp -r .github release/TreasureHunt/source/.github 2>/dev/null || true
+
+      - name: Create ZIP
+        run: |
+          cd release
+          zip -r TreasureHunt.zip TreasureHunt
+
+      - name: Upload ZIP Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: TreasureHuntPlugin-jar
-          path: target/*.jar
+          name: TreasureHunt
+          path: release/TreasureHunt.zip
           if-no-files-found: error
+          compression-level: 9
