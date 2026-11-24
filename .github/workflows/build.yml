@@ -1,4 +1,4 @@
-name: Prepare SRC Structure
+name: Build Plugin JAR
 
 on:
   push:
@@ -11,40 +11,42 @@ permissions:
   contents: read
 
 jobs:
-  prepare-src:
+  build:
     runs-on: ubuntu-latest
 
     steps:
       - name: Repository auschecken
         uses: actions/checkout@v4
 
-      - name: Dateien in src/ Struktur sortieren
+      - name: Java 21 einrichten
+        uses: actions/setup-java@v4
+        with:
+          distribution: "temurin"
+          java-version: "21"
+          cache: "maven"
+
+      - name: Dateien in src/ zusammensetzen
         run: |
-          mkdir -p out/src/main/java out/src/main/resources
+          mkdir -p src/main/java src/main/resources
 
-          # Java-Datei (falls im Root oder bereits unter src/)
+          # Falls TreasureHuntPlugin.java im Root liegt, in src/main/java kopieren
           if [ -f "TreasureHuntPlugin.java" ]; then
-            cp TreasureHuntPlugin.java out/src/main/java/
-          fi
-          if [ -d "src" ]; then
-            cp -r src/* out/src/ 2>/dev/null || true
+            cp TreasureHuntPlugin.java src/main/java/
           fi
 
-          # YAML-Dateien in resources legen
+          # YAML-Dateien aus dem Root nach src/main/resources kopieren
           for f in plugin.yml config.yml messages.yml; do
             if [ -f "$f" ]; then
-              cp "$f" out/src/main/resources/
+              cp "$f" src/main/resources/
             fi
           done
 
-          # pom.xml ebenfalls mitnehmen
-          if [ -f "pom.xml" ]; then
-            cp pom.xml out/
-          fi
+      - name: Mit Maven kompilieren und als JAR verpacken
+        run: mvn -B clean package
 
-      - name: Sortierte Dateien als Artifact hochladen
+      - name: Fertige JAR als Artifact hochladen
         uses: actions/upload-artifact@v4
         with:
-          name: th-v2-src
-          path: out/
+          name: TreasureHuntPlugin-jar
+          path: target/*.jar
           if-no-files-found: error
