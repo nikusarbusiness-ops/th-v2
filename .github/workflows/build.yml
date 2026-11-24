@@ -1,13 +1,9 @@
 
-name: Build TreasureHunt Plugin
+name: Build TreasureHunt ZIP
 
 on:
   push:
-    branches:
-      - main
-  pull_request:
-    branches:
-      - main
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -18,41 +14,51 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Repository
+      - name: Repository herunterladen
         uses: actions/checkout@v4
 
-      - name: Setup Java 21
+      - name: Java 21 installieren
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '21'
           cache: maven
 
-      - name: Build Plugin with Maven
-        run: mvn -B clean package
+      - name: Projekt vollständig kompilieren
+        run: mvn --batch-mode clean package
 
-      - name: Prepare ZIP Folder
+      - name: ZIP-Verzeichnis vorbereiten
         run: |
-          mkdir -p release/TreasureHunt
-          mkdir -p release/TreasureHunt/source
+          mkdir -p output/TreasureHunt
 
-          cp -r src release/TreasureHunt/source/
-          cp pom.xml release/TreasureHunt/source/
-          cp README* release/TreasureHunt/source/ 2>/dev/null || true
+          # Gesamtes Projekt übernehmen
+          rsync -a \
+            --exclude='.git/' \
+            --exclude='target/' \
+            --exclude='output/' \
+            --exclude='.idea/' \
+            --exclude='.vscode/' \
+            ./ output/TreasureHunt/
 
-          cp target/*.jar release/TreasureHunt/
+          # Fertige Plugin-JAR hinzufügen
+          mkdir -p output/TreasureHunt/build
+          cp target/*.jar output/TreasureHunt/build/
 
-          cp -r .github release/TreasureHunt/source/.github 2>/dev/null || true
-
-      - name: Create ZIP
+      - name: ZIP erstellen
         run: |
-          cd release
-          zip -r TreasureHunt.zip TreasureHunt
+          cd output
+          zip -r -9 TreasureHunt.zip TreasureHunt
 
-      - name: Upload ZIP Artifact
+      - name: ZIP-Inhalt kontrollieren
+        run: |
+          test -s output/TreasureHunt.zip
+          unzip -t output/TreasureHunt.zip
+          echo "ZIP erfolgreich erstellt und geprüft."
+
+      - name: Fertige ZIP veröffentlichen
         uses: actions/upload-artifact@v4
         with:
-          name: TreasureHunt
-          path: release/TreasureHunt.zip
+          name: TreasureHunt-Complete
+          path: output/TreasureHunt.zip
           if-no-files-found: error
           compression-level: 9
